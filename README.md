@@ -20,3 +20,7 @@ In my daily work though, this created a lot of _friction_ because estimating and
 ## 📝 License
 
 [MIT](LICENSE)
+
+## Zmiany Wicia
+
+Tutaj jakieś moje zmiany. Zobaczymy co z tego wyjdzie.
