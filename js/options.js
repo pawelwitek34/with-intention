@@ -12,6 +12,11 @@ import {
 
 import { createItem, addItem } from './utils/list.js'
 
+import {
+	getWebhookConfig,
+	saveWebhookConfig
+} from './utils/webhook.js'
+
 /**
  * Selectors
  */
@@ -32,6 +37,15 @@ const time_edit_response = document.querySelector('.time-edit-response')
 const time_edit_change_format = document.querySelector(
 	'.time-edit-change-format'
 )
+
+const manage_webhook_toggle = document.querySelector('.manage-webhook-toggle')
+const manage_webhook_toggle_checkbox = document.querySelector(
+	'.manage-webhook-toggle-checkbox'
+)
+const webhook_edit_container = document.querySelector('.webhook-edit-container')
+const webhook_url_input = document.querySelector('.webhook-url-input')
+const webhook_save_button = document.querySelector('.webhook-save-button')
+const webhook_response = document.querySelector('.webhook-response')
 
 /**
  * Copy-related
@@ -101,9 +115,79 @@ time_edit_select.addEventListener('change', (e) => {
 })
 
 /**
+ * Webhook event listeners
+ */
+manage_webhook_toggle.addEventListener('mouseenter', () => {
+	manage_webhook_toggle.parentNode.classList.add('hover')
+})
+manage_webhook_toggle.addEventListener('mouseleave', () => {
+	manage_webhook_toggle.parentNode.classList.remove('hover')
+})
+
+manage_webhook_toggle_checkbox.addEventListener('change', async () => {
+	const isEnabled = manage_webhook_toggle_checkbox.checked
+	webhook_edit_container.classList.toggle('is-visible')
+	manage_webhook_toggle_checkbox.parentNode.parentNode.classList.toggle(
+		'is-visible'
+	)
+
+	// If disabling, save immediately
+	if (!isEnabled) {
+		try {
+			await saveWebhookConfig(false, webhook_url_input.value)
+			webhook_response.textContent = 'Webhook disabled.'
+			webhook_response.style.color = 'var(--color-text-secondary)'
+			setTimeout(() => {
+				webhook_response.textContent = ''
+			}, 2000)
+		} catch (error) {
+			webhook_response.textContent = 'Error saving settings.'
+			webhook_response.style.color = 'var(--color-text-destructive)'
+		}
+	}
+})
+
+webhook_save_button.addEventListener('click', async () => {
+	const url = webhook_url_input.value.trim()
+	const isEnabled = manage_webhook_toggle_checkbox.checked
+
+	// Validate URL
+	if (!url) {
+		webhook_response.textContent = 'Please enter a webhook URL.'
+		webhook_response.style.color = 'var(--color-text-destructive)'
+		return
+	}
+
+	// Validate URL format
+	try {
+		const urlObj = new URL(url)
+		if (urlObj.protocol !== 'https:' && urlObj.protocol !== 'http:') {
+			throw new Error('Invalid protocol')
+		}
+	} catch (error) {
+		webhook_response.textContent = 'Please enter a valid URL (https://...).'
+		webhook_response.style.color = 'var(--color-text-destructive)'
+		return
+	}
+
+	// Save webhook config
+	try {
+		await saveWebhookConfig(isEnabled, url)
+		webhook_response.textContent = 'Webhook settings saved successfully!'
+		webhook_response.style.color = '#4caf50'
+		setTimeout(() => {
+			webhook_response.textContent = ''
+		}, 3000)
+	} catch (error) {
+		webhook_response.textContent = 'Error saving webhook settings.'
+		webhook_response.style.color = 'var(--color-text-destructive)'
+	}
+})
+
+/**
  * Setup
  */
-chrome.storage.local.get(undefined, ({ sites, time }) => {
+chrome.storage.local.get(undefined, async ({ sites, time }) => {
 	Object.keys(sites).forEach((e) => {
 		url_list.appendChild(createItem(e, sites[e]))
 	})
@@ -140,4 +224,21 @@ chrome.storage.local.get(undefined, ({ sites, time }) => {
 	time_edit_change_format.appendChild(
 		document.createTextNode(is24Hrs ? showFormat.us : showFormat.gb)
 	)
+
+	// Load webhook settings
+	try {
+		const webhookConfig = await getWebhookConfig()
+		if (webhookConfig.enabled) {
+			manage_webhook_toggle_checkbox.checked = true
+			webhook_edit_container.classList.add('is-visible')
+			manage_webhook_toggle_checkbox.parentNode.parentNode.classList.add(
+				'is-visible'
+			)
+		}
+		if (webhookConfig.url) {
+			webhook_url_input.value = webhookConfig.url
+		}
+	} catch (error) {
+		console.error('Error loading webhook config:', error)
+	}
 })

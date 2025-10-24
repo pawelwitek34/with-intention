@@ -104,3 +104,66 @@ ul > li label::before {
 .time-edit-change-format-container button:hover {
 	opacity: 1;
 }
+
+/* Webhook section */
+.manage-webhook.hover {
+	background: var(--color-foreground);
+}
+
+.manage-webhook:not(.is-visible).hover input[type='checkbox'] {
+	box-shadow: inset 0px 0px 0px 4px var(--color-highlight);
+}
+
+.manage-webhook-toggle {
+	display: flex;
+	align-items: center;
+	padding-bottom: 16px;
+	color: var(--color-text-primary);
+	font-size: 1.2rem;
+}
+
+.webhook-edit-container {
+	display: none;
+	padding-top: 16px;
+}
+
+.webhook-edit-container.is-visible {
+	display: block;
+}
+
+.webhook-edit-form {
+	width: 100%;
+	margin-bottom: 16px;
+}
+
+.webhook-edit-form label {
+	font-size: 0.8rem;
+	margin-bottom: 8px;
+}
+
+.webhook-url-input {
+	width: 100%;
+	padding: 12px;
+	font-size: 1rem;
+	background: var(--color-highlight);
+	color: var(--color-text-primary);
+	border: 1px solid transparent;
+	border-radius: 8px;
+	transition: border-color 0.2s;
+}
+
+.webhook-url-input:focus {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
+.webhook-save-button {
+	width: 100%;
+	margin-bottom: 8px;
+}
+
+.webhook-response {
+	min-height: 1.2em;
+	margin-top: 8px;
+	font-size: 0.9rem;
+}

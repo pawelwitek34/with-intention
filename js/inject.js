@@ -155,10 +155,64 @@ template.innerHTML = /*html*/ `
 		.container.is-dragging #input:hover {
 			background: none;
 		}
+
+		/*
+		* Webhook status icon
+		*/
+		.webhook-status {
+			position: absolute;
+			right: 16px;
+			top: 50%;
+			transform: translateY(-50%);
+			width: 20px;
+			height: 20px;
+			opacity: 0;
+			transition: opacity 0.3s ease-in-out;
+			pointer-events: none;
+		}
+
+		.webhook-status.visible {
+			opacity: 1;
+		}
+
+		.webhook-status.success {
+			animation: fadeInOut 2.5s ease-in-out;
+		}
+
+		.webhook-status.error {
+			animation: fadeInOut 3s ease-in-out;
+		}
+
+		@keyframes fadeInOut {
+			0% { opacity: 0; }
+			10% { opacity: 1; }
+			90% { opacity: 1; }
+			100% { opacity: 0; }
+		}
+
+		/* Success checkmark SVG */
+		.webhook-status.success::after {
+			content: '';
+			display: block;
+			width: 20px;
+			height: 20px;
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234caf50' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+			background-size: contain;
+		}
+
+		/* Error X SVG */
+		.webhook-status.error::after {
+			content: '';
+			display: block;
+			width: 20px;
+			height: 20px;
+			background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f44336' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='18' y1='6' x2='6' y2='18'%3E%3C/line%3E%3Cline x1='6' y1='6' x2='18' y2='18'%3E%3C/line%3E%3C/svg%3E");
+			background-size: contain;
+		}
 	</style>
 	<div id="veil"></div>
 	<div class="container" id="container">
-			<div id="input"></div><span class="icon"></span>
+			<div id="input"></div><span class="icon"></span><span class="webhook-status"></span>
 	</div>
 `
 
@@ -181,6 +235,7 @@ class Intention extends HTMLElement {
 		this.veil = this.shadowRoot.getElementById('veil')
 		this.input = this.shadowRoot.getElementById('input')
 		this.container = this.shadowRoot.getElementById('container')
+		this.webhookStatus = this.shadowRoot.querySelector('.webhook-status')
 
 		/**
 		 * Handle input events
@@ -216,7 +271,13 @@ class Intention extends HTMLElement {
 				this.insertAtCursor('&nbsp;')
 			} else if (e.key === 'Enter') {
 				e.preventDefault()
+				const intention = this.input.innerHTML
 				this.input.blur()
+
+				// Send webhook asynchronously (non-blocking)
+				if (intention) {
+					this.sendWebhookAsync(intention, window.location.href)
+				}
 			}
 		})
 
@@ -310,6 +371,141 @@ class Intention extends HTMLElement {
 			root.getSelection().collapseToEnd()
 			root.getSelection().modify('move', 'forward', 'character')
 		}
+	}
+
+	/**
+	 * Send webhook asynchronously with intention data
+	 * @param {string} intention - User's intention text
+	 * @param {string} url - Current page URL
+	 */
+	async sendWebhookAsync(intention, url) {
+		try {
+			// Get webhook configuration from storage
+			const config = await this.getWebhookConfig()
+
+			// If webhook is not enabled, skip
+			if (!config.enabled || !config.url) {
+				return
+			}
+
+			// Prepare payload
+			const payload = {
+				intention: intention,
+				url: url,
+				timestamp: new Date().toISOString()
+			}
+
+			console.log('Sending webhook to:', config.url, payload)
+
+			// Send webhook with retry logic
+			const result = await this.sendWithRetry(config.url, payload)
+
+			// Show status icon
+			this.showWebhookStatus(result.success)
+
+		} catch (error) {
+			console.error('Webhook error:', error)
+			this.showWebhookStatus(false)
+		}
+	}
+
+	/**
+	 * Get webhook configuration from chrome storage
+	 * @returns {Promise<{enabled: boolean, url: string}>}
+	 */
+	getWebhookConfig() {
+		return new Promise((resolve) => {
+			chrome.storage.local.get('webhook', ({ webhook }) => {
+				const config = webhook || { enabled: false, url: '' }
+				resolve(config)
+			})
+		})
+	}
+
+	/**
+	 * Send HTTP POST request with retry logic
+	 * @param {string} webhookUrl - Webhook URL
+	 * @param {object} payload - Data to send
+	 * @param {number} retryCount - Current retry attempt
+	 * @returns {Promise<{success: boolean, message: string}>}
+	 */
+	async sendWithRetry(webhookUrl, payload, retryCount = 0) {
+		const MAX_RETRIES = 1
+		const RETRY_DELAY = 5000 // 5 seconds
+		const TIMEOUT = 10000 // 10 seconds
+
+		try {
+			// Create abort controller for timeout
+			const controller = new AbortController()
+			const timeoutId = setTimeout(() => controller.abort(), TIMEOUT)
+
+			// Send POST request
+			const response = await fetch(webhookUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(payload),
+				signal: controller.signal
+			})
+
+			clearTimeout(timeoutId)
+
+			// Check if response is OK (status 200-299)
+			if (!response.ok) {
+				throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+			}
+
+			console.log('Webhook sent successfully:', response.status)
+			return {
+				success: true,
+				message: `Sent successfully (${response.status})`
+			}
+
+		} catch (error) {
+			console.error(`Webhook attempt ${retryCount + 1} failed:`, error)
+
+			// Retry logic
+			if (retryCount < MAX_RETRIES) {
+				console.log(`Retrying in ${RETRY_DELAY / 1000} seconds...`)
+				await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
+				return this.sendWithRetry(webhookUrl, payload, retryCount + 1)
+			}
+
+			// All retries exhausted
+			const errorMessage = error.name === 'AbortError'
+				? 'Request timeout'
+				: error.message || 'Network error'
+
+			return {
+				success: false,
+				message: errorMessage
+			}
+		}
+	}
+
+	/**
+	 * Show webhook status icon (success or error)
+	 * @param {boolean} success - Whether webhook was sent successfully
+	 */
+	showWebhookStatus(success) {
+		// Remove any existing classes
+		this.webhookStatus.classList.remove('success', 'error', 'visible')
+
+		// Add appropriate class
+		if (success) {
+			this.webhookStatus.classList.add('success')
+		} else {
+			this.webhookStatus.classList.add('error')
+		}
+
+		// Trigger animation
+		this.webhookStatus.classList.add('visible')
+
+		// Remove visible class after animation
+		setTimeout(() => {
+			this.webhookStatus.classList.remove('visible')
+		}, success ? 2500 : 3000)
 	}
 }
 

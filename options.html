@@ -78,6 +78,36 @@
 					</div>
 				</div>
 			</section>
+
+			<section class="manage-webhook hollow">
+				<label class="manage-webhook-toggle">
+					<input
+						class="manage-webhook-toggle-checkbox"
+						type="checkbox"
+					/>
+					Enable webhook notifications
+				</label>
+				<h3 class="description">
+					Send intention data to a webhook URL when you set an intention.
+				</h3>
+				<div class="webhook-edit-container hidden">
+					<form class="webhook-edit-form flex col">
+						<label>Webhook URL</label>
+						<input
+							class="webhook-url-input"
+							type="text"
+							autocomplete="off"
+							placeholder="https://webhook.site/your-unique-url"
+						/>
+					</form>
+					<button class="webhook-save-button primary">
+						Save webhook settings
+					</button>
+					<p class="webhook-response hint">
+						<!-- displays success/error message / options.js -->
+					</p>
+				</div>
+			</section>
 			<footer></footer>
 		</div>
 	</body>
